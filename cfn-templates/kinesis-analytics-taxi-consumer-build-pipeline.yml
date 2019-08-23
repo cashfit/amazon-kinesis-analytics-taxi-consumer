@@ -11,7 +11,7 @@ Parameters:
   GitHubUser:
     Description: Enter GitHub username of the repository owner
     Type: String
-    Default: aws-samples
+    Default: cashfit
 
   GitHubRepository:
     Description: Enter the repository name that contains the sources of the taxi consumer application
