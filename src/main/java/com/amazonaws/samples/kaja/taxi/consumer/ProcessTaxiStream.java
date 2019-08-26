@@ -21,6 +21,7 @@ import com.amazonaws.samples.kaja.taxi.consumer.events.EventSchema;
 import com.amazonaws.samples.kaja.taxi.consumer.events.PunctuatedAssigner;
 import com.amazonaws.samples.kaja.taxi.consumer.events.es.PickupCount;
 import com.amazonaws.samples.kaja.taxi.consumer.events.es.TripDuration;
+import com.amazonaws.samples.kaja.taxi.consumer.events.es.TripAmount;
 import com.amazonaws.samples.kaja.taxi.consumer.events.kinesis.Event;
 import com.amazonaws.samples.kaja.taxi.consumer.events.kinesis.TripEvent;
 import com.amazonaws.samples.kaja.taxi.consumer.utils.AmazonElasticsearchSink;
@@ -108,14 +109,19 @@ public class ProcessTaxiStream {
         kinesisConsumerConfig)
     );
 
-
+/*
     DataStream<TripEvent> trips = kinesisStream
         .assignTimestampsAndWatermarks(new PunctuatedAssigner())
         .filter(event -> TripEvent.class.isAssignableFrom(event.getClass()))
         .map(event -> (TripEvent) event)
         .filter(GeoUtils::hasValidCoordinates);
+*/
+    DataStream<TripEvent> trips = kinesisStream
+            .assignTimestampsAndWatermarks(new PunctuatedAssigner())
+            .filter(event -> TripEvent.class.isAssignableFrom(event.getClass()))
+            .map(event -> (TripEvent) event);
 
-
+/*
     SingleOutputStreamOperator<PickupCount> pickupCounts = trips
         .map(new MapFunction<TripEvent, Tuple3<String, Long, String>>() {
           @Override
@@ -134,8 +140,29 @@ public class ProcessTaxiStream {
             collector.collect(new PickupCount(position, count, timeWindow.getEnd()));
           }
         });
-
-
+*/
+            
+    SingleOutputStreamOperator<TripAmount> tripAmounts = trips
+            .map(new MapFunction<TripEvent, Tuple3<Long, Long, Double>>() {
+              @Override
+              public Tuple3<Long, Long, Double> map(TripEvent tripEvent) throws Exception {
+                return new Tuple3<>(tripEvent.tripId, tripEvent.tripId, tripEvent.totalAmount);
+              }
+            })
+            .keyBy(0)
+            .timeWindow(Time.hours(1))
+            .apply(new WindowFunction<Tuple3<Long, Long, Double>, TripAmount, Tuple, TimeWindow>() {
+              @Override
+              public void apply(Tuple tuple, TimeWindow timeWindow, Iterable<Tuple3<Long, Long, Double>> iterable, Collector<TripAmount> collector) throws Exception {
+                if (Iterables.size(iterable) > 1) {
+                	double amount = Iterables.get(iterable, 0).f0;
+                	collector.collect(new TripAmount(amount, timeWindow.getEnd()));
+                }
+                
+                
+              }
+            });
+/*
     DataStream<TripDuration> tripDurations = trips
         .flatMap(new FlatMapFunction<TripEvent, Tuple3<String, String, Long>>() {
           @Override
@@ -171,13 +198,12 @@ public class ProcessTaxiStream {
           }
         });
 
-
+*/
     if (flinkProperties.containsKey("ElasticsearchEndpoint")) {
       final String elasticsearchEndpoint = flinkProperties.getProperty("ElasticsearchEndpoint");
       final String region = flinkProperties.getProperty("Region", DEFAULT_REGION);
 
-      pickupCounts.addSink(AmazonElasticsearchSink.buildElasticsearchSink(elasticsearchEndpoint, region, "pickup_count", "pickup_count"));
-      tripDurations.addSink(AmazonElasticsearchSink.buildElasticsearchSink(elasticsearchEndpoint, region, "trip_duration", "trip_duration"));
+      tripAmounts.addSink(AmazonElasticsearchSink.buildElasticsearchSink(elasticsearchEndpoint, region, "trip_amount", "trip_amount"));
     }
 
 
