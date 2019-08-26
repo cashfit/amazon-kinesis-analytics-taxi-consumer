@@ -56,6 +56,7 @@ import org.slf4j.LoggerFactory;
 
 public class ProcessTaxiStream {
   private static final String DEFAULT_REGION = "us-east-2";
+  //private static final String DEFAULT_REGION = "cn-northwest-1"; 
   private static final Logger LOG = LoggerFactory.getLogger(ProcessTaxiStream.class);
   private static final List<String> MANDATORY_PARAMETERS = Arrays.asList("InputStreamName");
 
